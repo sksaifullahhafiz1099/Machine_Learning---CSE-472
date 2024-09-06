@@ -1,80 +1,110 @@
+# importing pandas csv library:
 import pandas as pd
 
+# stroing csv in variable:
 dataframe = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.csv")
 
+# Showing number of attributes:
 dataframe.shape
 
+# showing the statistics of the dataset: 
 dataframe.describe()
 
+# number of missing values in the dataset:
 dataframe.isnull().sum()
 
+# number of duplicate values in the dataset
 dataframe[dataframe.duplicated(keep=False)]
 
-# handle the null values with the mean of the column
-dataframe.fillna(dataframe.select_dtypes(include=['number']).mean(), inplace=True)
-
+# dropping row if target is null
 dataframe.dropna(subset=['Attrition'], inplace=True)
 
+# replacing any null number values with columnwise mean:
+dataframe.fillna(dataframe.select_dtypes(include=['number']).mean(), inplace=True)
+
+# replacing any null object values with columnwise most frequent:
+for column in dataframe.select_dtypes(include=['object']).columns:
+    most_frequent = dataframe[column].mode()[0]
+    dataframe[column].fillna(most_frequent, inplace=True)
+
+# keeping one copy of row if duplicate row found
 dataframe.drop_duplicates(inplace=True)
 
-features = dataframe.drop('Attrition', axis=1)
-target = dataframe['Attrition']
+# splitting data between Features and Labels
+Features = dataframe.drop('Attrition', axis=1)
+Labels = dataframe['Attrition']
+
+#using label encoding for some binary value columns
+from sklearn.preprocessing import LabelEncoder
+
+# Initialize LabelEncoder
+label_encoder = LabelEncoder()
+
+# Iterate over the object columns and apply label encoding to columns with two unique values
+for col in Features.select_dtypes(include=['object']).columns:
+    if Features[col].nunique() == 2:  # Check if the column has only two unique values
+        Features[col] = label_encoder.fit_transform(Features[col])
+
+# showing data types of Features
+Features.dtypes
 
 # List of columns to convert to categorical
-categorical_columns = [
-    'BusinessTravel',
-    'Department',
-    'EducationField',
-    'Gender',
-    'JobRole',
-    'MaritalStatus',
-    'Over18',
-    'OverTime'
-]
+categorical_columns = Features.select_dtypes(include=['object']).columns.tolist()
 
-# Convert each column to categorical type
+# Convert non numeric columns to categorical type
 for col in categorical_columns:
-    features[col] = features[col].astype('category')
+    Features[col] = Features[col].astype('category')
 
-features.dtypes
+# showing data types of Features
+Features.dtypes
 
-features = pd.get_dummies(features)
+# One hot encoding
+Features = pd.get_dummies(Features)
 
-# Convert only specific columns back to 0 and 1
-boolean_columns = features.select_dtypes(include=['bool']).columns
+# Convert only boolean columns back to 0 and 1
+boolean_columns = Features.select_dtypes(include=['bool']).columns
 
 # Convert the selected boolean columns to integers (0 and 1)
-features[boolean_columns] = features[boolean_columns].astype(int)
-features
+Features[boolean_columns] = Features[boolean_columns].astype(int)
+Features
 
-features.dtypes
+# showing features datatypes
+Features.dtypes
 
-# Step 1: Take input from the user
-#user_input = input("Press 0 for minmax, press 1 for standard input: ")
+# scaling type
+scaling_type = "minmax"
+#scaling_type = "standard"
 
-# Step 2: Convert the input to an integer
-#number = int(user_input)
+def scaling(Features, scaling_type):
+    # Identify binary columns (columns with only two unique values)
+    binary_columns = [col for col in Features.columns if len(Features[col].unique()) == 2]
+    
+    # Separate binary and non-binary columns
+    non_binary_columns = Features.columns.difference(binary_columns)
+    
+    if scaling_type == "minmax":
+        from sklearn.preprocessing import MinMaxScaler
+        scaler = MinMaxScaler()
+    elif scaling_type == "standard":
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
 
-number = 0
+    # Apply scaling only to non-binary columns
+    Features_scaled = Features.copy()
+    Features_scaled[non_binary_columns] = scaler.fit_transform(Features[non_binary_columns])
+    
+    return Features_scaled
 
-# Step 3: Use if and else statements to check the input value
-if number == 0:
-    from sklearn.preprocessing import MinMaxScaler
-    scaler = MinMaxScaler()
-    features_normalized = scaler.fit_transform(features) #fit between 0 and 1
-elif number == 1:
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    features_normalized = scaler.fit_transform(features) #It transforms the data so that it has a mean of 0 and a standard deviation of 1
-features_normalized[0]     
+features_normalized = scaling(Features,scaling_type)
 
-features_df = pd.DataFrame(features_normalized, columns=features.columns) # scaled feature dataframe
-target_df = pd.DataFrame(target, columns=['Attrition'])
+# features and labels are put into dataframe
+features_df = pd.DataFrame(features_normalized, columns=Features.columns) # scaled feature dataframe
+labels_df = pd.DataFrame(Labels, columns=['Attrition'])
 
 # correlation analysis of features with target
 # Convert 'Yes' to 1 and 'No' to 0 in the target column
-target_df['Attrition'] = target_df['Attrition'].map({'Yes': 1, 'No': 0})
-target_series = target_df['Attrition']
+labels_df['Attrition'] = labels_df['Attrition'].map({'Yes': 1, 'No': 0})
+target_series = labels_df['Attrition']
 correlations = features_df.corrwith(target_series) #contribution of each column
 correlations
 
@@ -84,23 +114,28 @@ top_20_correlations
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 # Assuming 'correlations' is a Pandas Series with feature correlation values
 # Sort correlations and get the top 20
 top_20_features = correlations.abs().sort_values(ascending=False).head(20).index
 
-# Loop through each of the top 20 features
-for feature in top_20_features:
-    # Separate the data based on the Attrition class
-    class_0 = features_df[target_df["Attrition"] == 0]
-    class_1 = features_df[target_df["Attrition"] == 1]
+#Importnecessarylibraries
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
-    # Plot 1D scatter plot
-    plt.figure(figsize=(8, 4))
-    plt.plot(class_0[feature], np.zeros_like(class_0[feature]), 'o', label='Attrition 0')
-    plt.plot(class_1[feature], np.zeros_like(class_1[feature]), 'o', label='Attrition 1')
 
-    plt.legend()
-    plt.xlabel(feature)
-    plt.title(f'1D Scatter Plot of {feature} by Attrition Classes')
-    plt.show()
+selected_features = Features[top_20_features]
+features_df = pd.DataFrame(features_normalized[selected_features.columns], columns=selected_features.columns)
+#features_df = pd.DataFrame(features_normalized, columns=Features.columns) # scaled feature dataframe
+
+X_train,X_test,y_train,y_test=train_test_split(features_df,labels_df, test_size=0.2,random_state=42)
+#Step2: InitializetheLogisticRegressionclassifier
+clf=LogisticRegression()
+#Step3:Traintheclassifieronthetrainingdata
+clf.fit(X_train,y_train)
+#Step4:Makepredictionsonthetestset
+y_pred=clf.predict(X_test)
+#Step5:Evaluatetheclassifier'sperformance
+accuracy=accuracy_score(y_test,y_pred)
+print(f"AccuracyofLogisticRegressionclassifier:{accuracy:.2f}")
