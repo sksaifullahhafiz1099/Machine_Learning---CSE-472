@@ -1,5 +1,7 @@
 # importing pandas csv library:
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 
 def data_import(file_name):
     # stroing csv in variable:
@@ -102,6 +104,27 @@ def correlation_analysis(features_normalized,Features,Labels):
     #selecting top 20 correlations
     top_20_correlations = correlations.abs().sort_values(ascending=False).head(20)
 
-    return top_20_correlations
+    return top_20_correlations,features_df,labels_df
+
+def show_plot(top_20_correlations,features_df,labels_df):
+    # Assuming 'correlations' is a Pandas Series with feature correlation values
+    # Sort correlations and get the top 20
+    top_20_features = top_20_correlations.index
+
+    # Loop through each of the top 20 features
+    for feature in top_20_features:
+        # Separate the data based on the Attrition class
+        class_0 = features_df[labels_df["Attrition"] == 0]
+        class_1 = features_df[labels_df["Attrition"] == 1]
+
+        # Plot 1D scatter plot
+        plt.figure(figsize=(8, 4))
+        plt.plot(class_0[feature], np.zeros_like(class_0[feature]), 'o', label='Attrition 0')
+        plt.plot(class_1[feature], np.zeros_like(class_1[feature]), 'o', label='Attrition 1')
+
+        plt.legend()
+        plt.xlabel(feature)
+        plt.title(f'1D Scatter Plot of {feature} by Attrition Classes')
+        plt.show()
 
 
